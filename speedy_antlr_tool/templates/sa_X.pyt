@@ -8,6 +8,10 @@ from antlr4 import InputStream, CommonTokenStream, Token
 from antlr4.tree.Tree import ParseTree
 from antlr4.error.ErrorListener import ErrorListener
 
+from antlr4.error.Errors import RecognitionException, ParseCancellationException 
+from antlr4.error.ErrorStrategy import DefaultErrorStrategy, BailErrorStrategy
+from antlr4.atn.PredictionMode import PredictionMode 
+
 from .{{grammar_name}}Parser import {{grammar_name}}Parser
 from .{{grammar_name}}Lexer import {{grammar_name}}Lexer
 
@@ -18,6 +22,8 @@ from .{{grammar_name}}Lexer import {{grammar_name}}Lexer
 #: This is automatically set to False if the accelerator is not available.
 #: You may override this to False to force use of Python fallback implementation.
 USE_CPP_IMPLEMENTATION = True
+
+USE_2_STAGE_PARSING = True
 
 
 class SA_ErrorListener:
@@ -151,4 +157,23 @@ def _py_parse(stream:InputStream, entry_rule_name:str, sa_err_listener:SA_ErrorL
     entry_rule_func = getattr(parser, entry_rule_name, None)
     if not isinstance(entry_rule_func, types.MethodType):
         raise ValueError("Invalid entry_rule_name '%s'" % entry_rule_name)
+    
+    if USE_2_STAGE_PARSING:
+        # 2 Stage Parsing 
+        # Stage 1: SLL mode 
+        parser._interp.predictionMode = PredictionMode.SLL 
+        parser._errHandler = BailErrorStrategy() 
+        val = None 
+        try: 
+            val = entry_rule_func()  # Attempt parsing in SLL mode 
+        except: 
+            # Stage 2: Fallback to LL mode 
+            token_stream.reset() 
+            parser.reset() 
+            parser._interp.predictionMode = PredictionMode.LL 
+            parser._errHandler = DefaultErrorStrategy() 
+            val = entry_rule_func()  # Retry parsing in LL mode 
+    
+        return val 
+
     return entry_rule_func()
