@@ -44,7 +44,8 @@ antlr4::tree::ParseTree* get_parse_tree({{grammar_name}}Parser *parser, const ch
  *      parser_cls:antlr4.Parser,
  *      stream:antlr4.InputStream,
  *      entry_rule_name:str,
- *      sa_err_listener:SA_ErrorListener
+ *      sa_err_listener:SA_ErrorListener,
+ *      use_2_stage_parsing:bool
  *  )
  */
 PyObject* do_parse(PyObject *self, PyObject *args) {
@@ -58,9 +59,10 @@ PyObject* do_parse(PyObject *self, PyObject *args) {
         PyObject *stream = NULL;
         const char *entry_rule_name = NULL;
         PyObject *sa_err_listener = NULL;
+        PyObject *use_2_stage_parsing = NULL;
         if(!PyArg_ParseTuple(args,
             "OOsO:do_parse",
-            &parser_cls, &stream, &entry_rule_name, &sa_err_listener
+            &parser_cls, &stream, &entry_rule_name, &sa_err_listener, &use_2_stage_parsing
         )) {
             return NULL;
         }
@@ -104,8 +106,25 @@ PyObject* do_parse(PyObject *self, PyObject *args) {
             parser.removeErrorListeners();
             parser.addErrorListener(&err_listener);
         }
-        antlr4::tree::ParseTree *parse_tree;
-        parse_tree = get_parse_tree(&parser, entry_rule_name);
+
+        if(PyObject_IsTrue(use_2_stage_parsing)) {
+            // 2 Stage Parsing 
+            // Stage 1: SLL mode 
+            parser.getInterpreter<antlr4::atn::ParserATNSimulator>()->setPredictionMode(antlr4::atn::PredictionMode::SLL); 
+            antlr4::tree::ParseTree *parse_tree = nullptr; 
+            try { 
+                parse_tree = get_parse_tree(&parser, entry_rule_name); // Attempt parsing in SLL mode 
+            } catch (antlr4::ParseCancellationException &e) { 
+                // Stage 2: Fallback to LL mode 
+                token_stream.reset(); 
+                parser.reset(); 
+                parser.getInterpreter<antlr4::atn::ParserATNSimulator>()->setPredictionMode(antlr4::atn::PredictionMode::LL); 
+                parse_tree = get_parse_tree(&parser, entry_rule_name); // Retry parsing in LL mode 
+            }
+        } else {
+            antlr4::tree::ParseTree *parse_tree;
+            parse_tree = get_parse_tree(&parser, entry_rule_name);
+        }
 
         // Translate Parse tree to Python
         SA_{{grammar_name}}Translator visitor(&translator);

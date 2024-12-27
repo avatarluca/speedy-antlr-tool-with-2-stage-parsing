@@ -107,7 +107,7 @@ def _cpp_parse(stream:InputStream, entry_rule_name:str, sa_err_listener:SA_Error
     if sa_err_listener is not None and not isinstance(sa_err_listener, SA_ErrorListener):
         raise TypeError("'sa_err_listener' shall be an instance of SA_ErrorListener or None")
 
-    return sa_{{grammar_name|lower}}_cpp_parser.do_parse({{grammar_name}}Parser, stream, entry_rule_name, sa_err_listener)
+    return sa_{{grammar_name|lower}}_cpp_parser.do_parse({{grammar_name}}Parser, stream, entry_rule_name, sa_err_listener, USE_2_STAGE_PARSING)
 
 
 #-------------------------------------------------------------------------------
